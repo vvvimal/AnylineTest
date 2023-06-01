@@ -16,6 +16,9 @@ class BarcodeScanViewController: UIViewController, ALScanViewDelegate {
     
     let configJSONFilename = "sample_barcode_config"
 
+    var scannedBarcodes: [String] = []
+    @IBOutlet weak var displayTextView: UITextView!
+
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view.
@@ -30,14 +33,12 @@ class BarcodeScanViewController: UIViewController, ALScanViewDelegate {
     func initialSetup() {
         guard let jsonStr = self.configJSONStrWith(fileName: configJSONFilename),
               let jsonDict = (jsonStr as NSString).asJSONObject() as? [String : Any] else {
-            print("error: unable to find JSON config")
             showAlert(message: "Scan view configuration json file issue.")
             return
         }
 
         // ScanViewConfig
         guard let scanViewConfig: ALScanViewPluginConfig = .withJSONDictionary(jsonDict) else {
-            print("error: scan view config")
             showAlert(message: "Scan view configuration issue.")
             return
         }
@@ -45,7 +46,6 @@ class BarcodeScanViewController: UIViewController, ALScanViewDelegate {
         do {
             self.scanViewPlugin = try ALScanViewPlugin(config: scanViewConfig)
         } catch {
-            print("unable to set scan view plugin: \(error.localizedDescription)")
             showAlert(message: error.localizedDescription)
         }
         
@@ -56,7 +56,6 @@ class BarcodeScanViewController: UIViewController, ALScanViewDelegate {
             do {
                 try self.scanView?.setScanViewPlugin(scanViewPlugin!)
             } catch {
-                print("unable to set scan view plugin: \(error.localizedDescription)")
                 showAlert(message: error.localizedDescription)
             }
         } else { // create a scanView
@@ -71,7 +70,6 @@ class BarcodeScanViewController: UIViewController, ALScanViewDelegate {
                     scanView.startCamera()
                 }
             } catch {
-                print("unable to instantiate scan view: \(error.localizedDescription)")
                 showAlert(message: error.localizedDescription)
             }
         }
@@ -81,14 +79,12 @@ class BarcodeScanViewController: UIViewController, ALScanViewDelegate {
         do {
             try self.scanViewPlugin?.start()
         } catch {
-            print("unable to instantiate scan view: \(error.localizedDescription)")
             showAlert(message: error.localizedDescription)
         }
     }
     
     func configJSONStrWith(fileName: String) -> NSString? {
         guard let url = Bundle.main.url(forResource: fileName, withExtension: "json") else {
-            print("Error: File not found.")
             showAlert(message: "File not found")
             return nil
         }
@@ -96,7 +92,6 @@ class BarcodeScanViewController: UIViewController, ALScanViewDelegate {
             let str = try NSString(contentsOf: url, encoding: 4)
             return str
         } catch {
-            print("Error: \(error.localizedDescription)")
             showAlert(message: error.localizedDescription)
             return nil
         }
@@ -114,27 +109,17 @@ class BarcodeScanViewController: UIViewController, ALScanViewDelegate {
     }
     
     func displayResults(_ scanResult: ALScanResult) {
-        self.scanViewPlugin?.stop()
         guard let barcodesFound = scanResult.pluginResult.barcodeResult?.barcodes else {
-            print("No Barcodes found")
+            showAlert(message: "No Barcodes found")
             return
         }
         
-        var resultData = [ALResultEntry]()
-        for barcode in barcodesFound {
-            resultData.append(ALResultEntry.init(title: "Barcode Result", value: barcode.value, shouldSpellOutValue: true))
-            resultData.append(ALResultEntry.init(title: "Barcode Symbology", value: barcode.format, shouldSpellOutValue: true))
-        }
-        if barcodesFound.count < 1 {
-            return
-        }
+        let barcodeStringArr = barcodesFound.map({$0.value}).filter({ barcodeStr in
+            !scannedBarcodes.contains(barcodeStr)
+        })
         
-        let barcodeImage = scanResult.croppedImage
-
-        let resultVC: ALResultViewController = .init(results: resultData)
-        resultVC.imagePrimary = barcodeImage
-        self.navigationController?.pushViewController(resultVC, animated: true)
-
+        scannedBarcodes.append(contentsOf: barcodeStringArr)
+        self.displayTextView.text = scannedBarcodes.joined(separator: ", " )
     }
 
     func showAlert(title: String? = nil, message: String) {
@@ -149,7 +134,6 @@ class BarcodeScanViewController: UIViewController, ALScanViewDelegate {
 
 extension BarcodeScanViewController: ALScanPluginDelegate {
     func scanPlugin(_ scanPlugin: ALScanPlugin, resultReceived scanResult: ALScanResult) {
-        print("Scan Result: ", scanResult.pluginResult.barcodeResult ?? "")
         displayResults(scanResult)
     }
 }
